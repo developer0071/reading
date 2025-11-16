@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reading Game – Section</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f9fafb;
+    color: #222;
+    padding: 30px;
+  }
+  .reading-box {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    line-height: 1.8;
+  }
+  .word {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: 0.2s;
+  }
+  .word.marked {
+    background-color: #c3e6cb;
+    font-weight: bold;
+  }
+  .answers {
+    margin-top: 20px;
+    background: #fff;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .answers label {
+    display: block;
+    margin-top: 10px;
+  }
+  .answers input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+  }
+  button {
+    margin-top: 15px;
+    background-color: #0078d7;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #005fa3;
+  }
+  #resultBox {
+    margin-top: 15px;
+    font-weight: bold;
+  }
+  #downloadPdfBtn, #resetStatsBtn {
+    display: none;
+  }
+  .inside {
+    margin: 35px;
+    margin-left: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h2>📖 Reading Game — Mark & Answer</h2>
+<h3>Read the following introduction to a story and decide which words are missing.</h3>
+
+<div class="reading-box" id="readingText">
+  Jason ran <input type="text" id="q1" placeholder="Type your answer..." required> 
+  the stairs, two at a time, jumping off the bottom step and landing on the floor with a loud 'thud'. 
+  “Don’t do that, Jason! How many times do I have to tell you?” his mother called from in the kitchen. 
+  “Yeah. Sorry, mum”, he responded, not really meaning it. 
+  “You should have <input type="text" id="q2" placeholder="Type your answer..."> for school ten minutes ago,” 
+  continued his mother to an obviously unconcerned Jason. 
+  As he entered the kitchen he <input type="text" id="q3" placeholder="Type your answer..."> 
+  up a heavily buttered piece of toast from a plate on the table. 
+  Jason was in no hurry to get to school. It was a Tuesday. That meant double maths, first lesson. 
+  Jason jumped up onto the counter <input type="text" id="q4" placeholder="Type your answer..."> 
+  his mother who was already making a start on the breakfast washing 
+  <input type="text" id="q5" placeholder="Type your answer...">.
+  “Can I <input type="text" id="q6" placeholder="Type your answer..."> home today?” he asked.
+  “Don’t be so stupid!”
+  “It’s not like they can teach me <input type="text" id="q7" placeholder="Type your answer..."> I don’t already know,” he mumbled.
+  “Your school report seems to say otherwise. Your teacher said that if you…” 
+  and that was as <input type="text" id="q8" placeholder="Type your answer..."> as Jason heard.
+</div>
+
+<div class="answers">
+  <button onclick="checkAnswers()">Submit Answers</button>
+  <div id="resultBox"></div>
+  <button id="downloadPdfBtn" onclick="downloadPDF()">📄 Download PDF</button>
+  <button id="resetStatsBtn" onclick="resetStats()">♻️ Reset Progress</button>
+</div>
+
+<script>
+/* ========= Make only text words markable ========= */
+const readingText = document.getElementById('readingText');
+function wrapWords(element) {
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === 3) {
+      const words = node.textContent.split(/(\s+)/);
+      const fragment = document.createDocumentFragment();
+      words.forEach((word, i) => {
+        if (word.trim().length > 0) {
+          const span = document.createElement('span');
+          span.className = 'word';
+          span.textContent = word;
+          fragment.appendChild(span);
+        } else {
+          fragment.appendChild(document.createTextNode(word));
+        }
+      });
+      node.replaceWith(fragment);
+    } else if (node.nodeType === 1 && node.tagName !== "INPUT") {
+      wrapWords(node);
+    }
+  }
+}
+wrapWords(readingText);
+
+const wordElements = document.querySelectorAll('.word');
+
+/* ========= Restore marked words ========= */
+const savedMarks = JSON.parse(localStorage.getItem("reading_markedWords") || "[]");
+savedMarks.forEach(i => {
+  const word = wordElements[i];
+  if (word) word.classList.add("marked");
+});
+
+/* ========= Marking control ========= */
+const alreadySubmitted = localStorage.getItem("reading_submitted");
+if (!alreadySubmitted) {
+  wordElements.forEach(word => {
+    word.addEventListener('click', () => word.classList.toggle('marked'));
+  });
+}
+
+/* ========= Correct answers ========= */
+const correctAnswers = {
+  q1: "down",
+  q2: "left",
+  q3: "picked",
+  q4: "beside",
+  q5: "up",
+  q6: "stay",
+  q7: "anything",
+  q8: "much"
+};
+
+/* ========= Feedback ========= */
+function showFeedback(key, userInput, correctAnswer) {
+  const inputEl = document.getElementById(key);
+  const oldFeedback = document.getElementById(`${key}-feedback`);
+  if (oldFeedback) oldFeedback.remove();
+
+  const feedback = document.createElement("span");
+  feedback.className = "feedback";
+  feedback.id = `${key}-feedback`;
+
+  if (userInput.trim().toLowerCase() === correctAnswer.toLowerCase()) {
+    feedback.textContent = " ✅ Correct";
+    feedback.style.color = "green";
+    return { feedback, isCorrect: true };
+  } else {
+    feedback.textContent = " ❌ Wrong";
+    feedback.style.color = "red";
+    return { feedback, isCorrect: false };
+  }
+}
+
+/* ========= Check Answers ========= */
+function checkAnswers() {
+  if (localStorage.getItem("reading_submitted")) {
+    let attempts = +localStorage.getItem("reading_cheat") || 0;
+    localStorage.setItem("reading_cheat", ++attempts);
+    let warn = document.getElementById("cheat-warning");
+    if (!warn) {
+      warn = document.createElement("div");
+      warn.id = "cheat-warning";
+      warn.style.color = "red";
+      warn.style.fontWeight = "bold";
+      warn.style.textAlign = "center";
+      warn.style.marginTop = "15px";
+      document.getElementById("resultBox").after(warn);
+    }
+    warn.innerHTML = `🛑 Stop cheating! You've already submitted ${attempts} time(s)! 😡`;
+    return;
+  }
+
+  // Save marked words
+  const markedIndexes = [];
+  wordElements.forEach((word, i) => {
+    if (word.classList.contains("marked")) markedIndexes.push(i);
+  });
+  localStorage.setItem("reading_markedWords", JSON.stringify(markedIndexes));
+
+  // Disable marking
+  wordElements.forEach(word => word.style.pointerEvents = "none");
+
+  let correct = 0;
+  const total = Object.keys(correctAnswers).length;
+
+  for (let key in correctAnswers) {
+    const inputEl = document.getElementById(key);
+    const userInput = inputEl.value.trim();
+    localStorage.setItem("reading_" + key, userInput);
+
+    const { feedback, isCorrect } = showFeedback(key, userInput, correctAnswers[key]);
+    inputEl.insertAdjacentElement("afterend", feedback);
+    if (isCorrect) correct++;
+  }
+
+  const incorrect = total - correct;
+  const resultText = `✅ Correct: ${correct} / ${total}<br>❌ Wrong: ${incorrect}`;
+  document.getElementById("resultBox").innerHTML = resultText;
+  localStorage.setItem("reading_result", resultText);
+  localStorage.setItem("reading_submitted", "true");
+  document.getElementById("downloadPdfBtn").style.display = "block";
+}
+
+/* ========= Restore saved data ========= */
+window.onload = () => {
+  for (let key in correctAnswers) {
+    const saved = localStorage.getItem("reading_" + key);
+    if (saved) {
+      const inputEl = document.getElementById(key);
+      inputEl.value = saved;
+      const { feedback } = showFeedback(key, saved, correctAnswers[key]);
+      inputEl.insertAdjacentElement("afterend", feedback);
+    }
+  }
+
+  const savedResult = localStorage.getItem("reading_result");
+  if (savedResult) document.getElementById("resultBox").innerHTML = savedResult;
+
+  if (localStorage.getItem("reading_submitted") === "true") {
+    document.getElementById("downloadPdfBtn").style.display = "block";
+    wordElements.forEach(word => word.style.pointerEvents = "none");
+  }
+};
+
+/* ========= PDF ========= */
+function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(12);
+  doc.text("Reading Practice – Section", 10, 10);
+
+  let y = 20;
+  Object.entries(correctAnswers).forEach(([key, answer], i) => {
+    const input = localStorage.getItem("reading_" + key) || "(empty)";
+    doc.text(`${i + 1}. Your Answer: ${input} | Correct Answer: ${answer}`, 10, y);
+    y += 10;
+  });
+
+  const result = localStorage.getItem("reading_result") || "";
+  doc.text("Result:", 10, y + 10);
+  doc.text(result.replace(/<br>/g, " "), 10, y + 20);
+  doc.save("Reading_Section_Answers.pdf");
+}
+
+/* ========= Reset (Ctrl+I) ========= */
+function resetStats() {
+  const password = prompt("Enter reset password:");
+  if (password !== "read123") {
+    alert("❌ Incorrect password. Stats not cleared.");
+    return;
+  }
+
+  Object.keys(localStorage)
+    .filter(k => k.startsWith("reading_"))
+    .forEach(k => localStorage.removeItem(k));
+
+  alert("✅ Reading stats cleared!");
+  location.reload();
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key.toLowerCase() === "i") {
+    e.preventDefault();
+    const btn = document.getElementById("resetStatsBtn");
+    btn.style.display = "block";
+    btn.scrollIntoView({ behavior: "smooth" });
+  }
+});
+</script>
+
+</body>
+</html>
