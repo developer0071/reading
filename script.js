@@ -305,3 +305,21 @@ function makeWindowDraggable(winId) {
 
 makeWindowDraggable("readingWindow");
 makeWindowDraggable("controlsWindow");
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'F12') {
+        e.preventDefault();
+    }
+    
+    if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) {
+        e.preventDefault();
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+    }
+});
+document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+});
+
